@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+
+{% block title %}Home{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0">设备概览</h4>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="card bg-primary text-white">
+                            <div class="card-body">
+                                <h5 class="card-title">总设备数</h5>
+                                <h2 class="card-text" id="total-devices">0</h2>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-success text-white">
+                            <div class="card-body">
+                                <h5 class="card-title">在线设备</h5>
+                                <h2 class="card-text" id="online-devices">0</h2>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-danger text-white">
+                            <div class="card-body">
+                                <h5 class="card-title">离线设备</h5>
+                                <h2 class="card-text" id="offline-devices">0</h2>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-info text-white">
+                            <div class="card-body">
+                                <h5 class="card-title">最近活动</h5>
+                                <h2 class="card-text" id="recent-devices">0</h2>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0">最近活动设备</h4>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>设备ID</th>
+                                <th>型号</th>
+                                <th>状态</th>
+                                <th>最后在线时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="devices-table-body">
+                            <!-- 设备列表将通过JavaScript动态填充 -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="no-devices-message" class="alert alert-info" style="display: none;">
+                    暂无设备数据。请确保 GenieACS 服务正在运行并且已正确配置。
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function updateDevices() {
+    fetch('/api/devices')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const devices = data.devices;
+                
+                // 更新统计信息
+                document.getElementById('total-devices').textContent = devices.length;
+                document.getElementById('online-devices').textContent = 
+                    devices.filter(d => d.status === 'online').length;
+                document.getElementById('offline-devices').textContent = 
+                    devices.filter(d => d.status === 'offline').length;
+                
+                // 计算24小时内的活动设备
+                const now = new Date();
+                const recentDevices = devices.filter(d => {
+                    if (!d.last_seen) return false;
+                    const lastSeen = new Date(d.last_seen);
+                    return (now - lastSeen) <= 24 * 60 * 60 * 1000;
+                });
+                document.getElementById('recent-devices').textContent = recentDevices.length;
+                
+                // 更新设备表格
+                const tbody = document.getElementById('devices-table-body');
+                const noDevicesMessage = document.getElementById('no-devices-message');
+                
+                if (devices.length === 0) {
+                    tbody.innerHTML = '';
+                    noDevicesMessage.style.display = 'block';
+                    return;
+                }
+                
+                noDevicesMessage.style.display = 'none';
+                
+                // 按最后在线时间排序并取前5个
+                const sortedDevices = devices
+                    .sort((a, b) => new Date(b.last_seen || 0) - new Date(a.last_seen || 0))
+                    .slice(0, 5);
+                
+                tbody.innerHTML = sortedDevices.map(device => `
+                    <tr>
+                        <td>${device.device_id || 'Unknown'}</td>
+                        <td>${device.model || 'Unknown'}</td>
+                        <td>
+                            <span class="badge ${device.status === 'online' ? 'bg-success' : 'bg-danger'}">
+                                ${device.status || 'offline'}
+                            </span>
+                        </td>
+                        <td>${device.last_seen ? new Date(device.last_seen).toLocaleString() : 'Never'}</td>
+                        <td>
+                            <a href="/devices/${device.device_id}" class="btn btn-sm btn-info">查看详情</a>
+                        </td>
+                    </tr>
+                `).join('');
+            }
+        })
+        .catch(error => {
+            console.error('获取设备数据失败:', error);
+            document.getElementById('no-devices-message').style.display = 'block';
+        });
+}
+
+// 页面加载时立即更新一次
+updateDevices();
+
+// 每30秒更新一次
+setInterval(updateDevices, 30000);
+</script>
+{% endblock %} 

@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block title %}设备管理{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>设备列表</h2>
+    <button class="btn btn-primary" onclick="refreshDevices()">
+        <i class="bi bi-arrow-clockwise"></i> 刷新
+    </button>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>设备ID</th>
+                <th>制造商</th>
+                <th>型号</th>
+                <th>OUI</th>
+                <th>产品类别</th>
+                <th>固件版本</th>
+                <th>状态</th>
+                <th>最后在线</th>
+                <th>注册时间</th>
+                <th>最后启动</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for device in devices %}
+            <tr>
+                <td>{{ device.device_id }}</td>
+                <td>{{ device.manufacturer }}</td>
+                <td>{{ device.model }}</td>
+                <td>{{ device.oui }}</td>
+                <td>{{ device.product_class }}</td>
+                <td>{{ device.firmware_version }}</td>
+                <td>
+                    <span class="badge {% if device.status == 'online' %}bg-success{% else %}bg-danger{% endif %}">
+                        {% if device.status == 'online' %}在线{% else %}离线{% endif %}
+                    </span>
+                </td>
+                <td>{{ device.last_seen.strftime('%Y-%m-%d %H:%M:%S') if device.last_seen else '从未' }}</td>
+                <td>{{ device.registered.strftime('%Y-%m-%d %H:%M:%S') if device.registered else '未知' }}</td>
+                <td>{{ device.last_boot.strftime('%Y-%m-%d %H:%M:%S') if device.last_boot else '未知' }}</td>
+                <td>
+                    <a href="{{ url_for('devices.device_detail', device_id=device.device_id) }}" 
+                       class="btn btn-sm btn-info">详情</a>
+                    <button class="btn btn-sm btn-warning" 
+                            onclick="rebootDevice('{{ device.device_id }}')">重启</button>
+                    <button class="btn btn-sm btn-danger" 
+                            onclick="factoryReset('{{ device.device_id }}')">恢复出厂</button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function refreshDevices() {
+    window.location.reload();
+}
+
+function rebootDevice(deviceId) {
+    if (confirm('确定要重启这个设备吗？')) {
+        fetch(`/devices/${deviceId}/reboot`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            alert('设备重启已启动');
+            refreshDevices();
+        })
+        .catch(error => {
+            alert('重启设备时出错');
+            console.error('Error:', error);
+        });
+    }
+}
+
+function factoryReset(deviceId) {
+    if (confirm('确定要将设备恢复出厂设置吗？此操作无法撤销！')) {
+        fetch(`/devices/${deviceId}/factory-reset`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            alert('设备恢复出厂设置已启动');
+            refreshDevices();
+        })
+        .catch(error => {
+            alert('恢复出厂设置时出错');
+            console.error('Error:', error);
+        });
+    }
+}
+</script>
+{% endblock %} 
