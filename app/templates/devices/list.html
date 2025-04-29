@@ -3,59 +3,112 @@
 {% block title %}设备管理{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2>设备列表</h2>
-    <button class="btn btn-primary" onclick="refreshDevices()">
-        <i class="bi bi-arrow-clockwise"></i> 刷新
-    </button>
-</div>
-
-<div class="table-responsive">
-    <table class="table table-striped">
-        <thead>
-            <tr>
-                <th>设备ID</th>
-                <th>制造商</th>
-                <th>型号</th>
-                <th>OUI</th>
-                <th>产品类别</th>
-                <th>固件版本</th>
-                <th>状态</th>
-                <th>最后在线</th>
-                <th>注册时间</th>
-                <th>最后启动</th>
-                <th>操作</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for device in devices %}
-            <tr>
-                <td>{{ device.device_id }}</td>
-                <td>{{ device.manufacturer }}</td>
-                <td>{{ device.model }}</td>
-                <td>{{ device.oui }}</td>
-                <td>{{ device.product_class }}</td>
-                <td>{{ device.firmware_version }}</td>
-                <td>
-                    <span class="badge {% if device.status == 'online' %}bg-success{% else %}bg-danger{% endif %}">
-                        {% if device.status == 'online' %}在线{% else %}离线{% endif %}
-                    </span>
-                </td>
-                <td>{{ device.last_seen.strftime('%Y-%m-%d %H:%M:%S') if device.last_seen else '从未' }}</td>
-                <td>{{ device.registered.strftime('%Y-%m-%d %H:%M:%S') if device.registered else '未知' }}</td>
-                <td>{{ device.last_boot.strftime('%Y-%m-%d %H:%M:%S') if device.last_boot else '未知' }}</td>
-                <td>
-                    <a href="{{ url_for('devices.device_detail', device_id=device.device_id) }}" 
-                       class="btn btn-sm btn-info">详情</a>
-                    <button class="btn btn-sm btn-warning" 
-                            onclick="rebootDevice('{{ device.device_id }}')">重启</button>
-                    <button class="btn btn-sm btn-danger" 
-                            onclick="factoryReset('{{ device.device_id }}')">恢复出厂</button>
-                </td>
-            </tr>
+<div class="container mt-4">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">{{ message }}</div>
             {% endfor %}
-        </tbody>
-    </table>
+        {% endif %}
+    {% endwith %}
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>设备列表</h2>
+        <div>
+            <button class="btn btn-secondary me-2" onclick="toggleDebugInfo()">
+                <i class="bi bi-bug"></i> 调试信息
+            </button>
+            <button class="btn btn-primary" onclick="refreshDevices()">
+                <i class="bi bi-arrow-clockwise"></i> 刷新
+            </button>
+        </div>
+    </div>
+
+    {% if devices %}
+    <!-- 调试信息部分 -->
+    <div id="debugInfo" class="card mb-4" style="display: none;">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0">调试信息</h5>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-info">
+                <h6>设备数量: {{ devices|length }}</h6>
+                <h6>当前时间: <span id="currentTime"></span></h6>
+            </div>
+            <div class="mb-3">
+                <div class="input-group">
+                    <input type="text" class="form-control" id="debugSearch" placeholder="搜索设备信息...">
+                    <button class="btn btn-outline-secondary" type="button" onclick="clearSearch()">
+                        <i class="bi bi-x-circle"></i> 清除
+                    </button>
+                </div>
+                <small class="text-muted">支持搜索设备ID、制造商、型号、状态等信息</small>
+            </div>
+            <div class="accordion" id="deviceDebugAccordion">
+                {% for device in devices %}
+                <div class="accordion-item device-debug-item">
+                    <h2 class="accordion-header" id="heading{{ loop.index }}">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" 
+                                data-bs-target="#collapse{{ loop.index }}">
+                            设备 {{ loop.index }}: {{ device._id }}
+                        </button>
+                    </h2>
+                    <div id="collapse{{ loop.index }}" class="accordion-collapse collapse" 
+                         data-bs-parent="#deviceDebugAccordion">
+                        <div class="accordion-body">
+                            <pre class="bg-light p-3 device-debug-content"><code>{{ device | tojson(indent=2) }}</code></pre>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>设备ID</th>
+                    <th>制造商</th>
+                    <th>型号</th>
+                    <th>状态</th>
+                    <th>最后在线时间</th>
+                    <th>注册时间</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for device in devices %}
+                <tr>
+                    <td>{{ device._id }}</td>
+                    <td>{{ device._deviceId._Manufacturer }}</td>
+                    <td>{{ device._deviceId._ProductClass }}</td>
+                    <td>
+                        <span class="badge {% if device._deviceStatus == '在线' %}bg-success{% else %}bg-danger{% endif %}">
+                            {{ device._deviceStatus }}
+                        </span>
+                    </td>
+                    <td>{{ device._lastInform }}</td>
+                    <td>{{ device._registered }}</td>
+                    <td>
+                        <a href="{{ url_for('devices.device_detail', device_id=device._id) }}" 
+                           class="btn btn-sm btn-info">详情</a>
+                        <button class="btn btn-sm btn-warning" 
+                                onclick="rebootDevice('{{ device._id }}')">重启</button>
+                        <button class="btn btn-sm btn-danger" 
+                                onclick="factoryReset('{{ device._id }}')">恢复出厂</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="alert alert-info">
+        当前没有可用的设备。请确保 GenieACS 服务正在运行并且已正确配置。
+    </div>
+    {% endif %}
 </div>
 {% endblock %}
 
@@ -63,6 +116,23 @@
 <script>
 function refreshDevices() {
     window.location.reload();
+}
+
+function toggleDebugInfo() {
+    const debugInfo = document.getElementById('debugInfo');
+    debugInfo.style.display = debugInfo.style.display === 'none' ? 'block' : 'none';
+    updateCurrentTime();
+    if (debugInfo.style.display === 'block') {
+        document.getElementById('debugSearch').focus();
+    }
+}
+
+function updateCurrentTime() {
+    const currentTimeElement = document.getElementById('currentTime');
+    if (currentTimeElement) {
+        const now = new Date();
+        currentTimeElement.textContent = now.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+    }
 }
 
 function rebootDevice(deviceId) {
@@ -104,5 +174,40 @@ function factoryReset(deviceId) {
         });
     }
 }
+
+function clearSearch() {
+    const searchInput = document.getElementById('debugSearch');
+    searchInput.value = '';
+    filterDebugInfo('');
+}
+
+function filterDebugInfo(searchText) {
+    const items = document.querySelectorAll('.device-debug-item');
+    const searchLower = searchText.toLowerCase();
+    
+    items.forEach(item => {
+        const content = item.querySelector('.device-debug-content').textContent.toLowerCase();
+        const header = item.querySelector('.accordion-button').textContent.toLowerCase();
+        
+        if (content.includes(searchLower) || header.includes(searchLower)) {
+            item.style.display = '';
+        } else {
+            item.style.display = 'none';
+        }
+    });
+}
+
+// 添加搜索输入事件监听
+document.addEventListener('DOMContentLoaded', function() {
+    updateCurrentTime();
+    setInterval(updateCurrentTime, 1000);
+    
+    const searchInput = document.getElementById('debugSearch');
+    if (searchInput) {
+        searchInput.addEventListener('input', function(e) {
+            filterDebugInfo(e.target.value);
+        });
+    }
+});
 </script>
 {% endblock %} 

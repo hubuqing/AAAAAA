@@ -1,0 +1,277 @@
+{% extends "base.html" %}
+
+{% block title %}设备详情{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            
+            {% if device %}
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h4>设备详情 - {{ device._deviceId._ProductClass }}</h4>
+                <div>
+                    <button class="btn btn-secondary" onclick="toggleDebugInfo()">
+                        <i class="bi bi-bug"></i> 调试信息
+                    </button>
+                </div>
+            </div>
+
+            <!-- 调试信息部分 -->
+            <div id="debugInfo" class="card mb-4" style="display: none;">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">调试信息</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <h6>当前时间: <span id="currentTime"></span></h6>
+                        <h6>设备状态: {{ device._deviceStatus }}</h6>
+                    </div>
+                    <div class="mb-3">
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="debugSearch" placeholder="搜索设备信息...">
+                            <button class="btn btn-outline-secondary" type="button" onclick="clearSearch()">
+                                <i class="bi bi-x-circle"></i> 清除
+                            </button>
+                        </div>
+                        <small class="text-muted">支持搜索设备参数、值等信息</small>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0">原始设备数据</h6>
+                        </div>
+                        <div class="card-body">
+                            <pre class="bg-light p-3 device-debug-content"><code>{{ device | tojson(indent=2) }}</code></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h5>基本信息</h5>
+                            <table class="table">
+                                <tr>
+                                    <th>制造商</th>
+                                    <td>{{ device._deviceId._Manufacturer }}</td>
+                                </tr>
+                                <tr>
+                                    <th>产品型号</th>
+                                    <td>{{ device._deviceId._ProductClass }}</td>
+                                </tr>
+                                <tr>
+                                    <th>序列号</th>
+                                    <td>{{ device._deviceId._SerialNumber }}</td>
+                                </tr>
+                                <tr>
+                                    <th>最后在线时间</th>
+                                    <td>
+                                        {{ device._lastInform }}
+                                        <span class="badge {% if device._deviceStatus == '在线' %}bg-success{% else %}bg-danger{% endif %}">
+                                            {{ device._deviceStatus }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>注册时间</th>
+                                    <td>{{ device._registered }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h5>设备操作</h5>
+                            <div class="btn-group">
+                                <button class="btn btn-warning" onclick="rebootDevice('{{ device._id }}')">重启设备</button>
+                                <button class="btn btn-danger" onclick="factoryReset('{{ device._id }}')">恢复出厂设置</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mt-4">
+                        <div class="col-md-12">
+                            <h5>设备参数</h5>
+                            {% if parameters %}
+                            <div class="table-responsive">
+                                <table class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>参数名</th>
+                                            <th>值</th>
+                                            <th>操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for param in parameters %}
+                                        <tr>
+                                            <td>{{ param.name }}</td>
+                                            <td>{{ param.value }}</td>
+                                            <td>
+                                                {% if param.writable %}
+                                                <button class="btn btn-sm btn-primary" onclick="editParameter('{{ device._id }}', '{{ param.name }}')">编辑</button>
+                                                {% else %}
+                                                <button class="btn btn-sm btn-secondary" disabled>只读</button>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {% else %}
+                            <div class="alert alert-info">
+                                暂无设备参数信息
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="alert alert-danger">
+                设备不存在或无法获取设备信息
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+function toggleDebugInfo() {
+    const debugInfo = document.getElementById('debugInfo');
+    debugInfo.style.display = debugInfo.style.display === 'none' ? 'block' : 'none';
+    updateCurrentTime();
+    if (debugInfo.style.display === 'block') {
+        document.getElementById('debugSearch').focus();
+    }
+}
+
+function updateCurrentTime() {
+    const currentTimeElement = document.getElementById('currentTime');
+    if (currentTimeElement) {
+        const now = new Date();
+        currentTimeElement.textContent = now.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+    }
+}
+
+function rebootDevice(deviceId) {
+    if (confirm('确定要重启设备吗？')) {
+        fetch(`/devices/${deviceId}/reboot`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('设备重启命令已发送');
+            } else {
+                alert('设备重启失败：' + data.error);
+            }
+        })
+        .catch(error => {
+            alert('操作失败：' + error);
+            console.error('Error:', error);
+        });
+    }
+}
+
+function factoryReset(deviceId) {
+    if (confirm('确定要恢复出厂设置吗？此操作不可恢复！')) {
+        fetch(`/devices/${deviceId}/factory-reset`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('设备恢复出厂设置命令已发送');
+            } else {
+                alert('设备恢复出厂设置失败：' + data.error);
+            }
+        })
+        .catch(error => {
+            alert('操作失败：' + error);
+            console.error('Error:', error);
+        });
+    }
+}
+
+function editParameter(deviceId, parameter) {
+    const newValue = prompt('请输入新的参数值：');
+    if (newValue !== null) {
+        fetch(`/devices/${deviceId}/parameters`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                parameter: parameter,
+                value: newValue
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('参数更新成功');
+                location.reload();
+            } else {
+                alert('参数更新失败：' + data.error);
+            }
+        })
+        .catch(error => {
+            alert('操作失败：' + error);
+            console.error('Error:', error);
+        });
+    }
+}
+
+function clearSearch() {
+    const searchInput = document.getElementById('debugSearch');
+    searchInput.value = '';
+    filterDebugInfo('');
+}
+
+function filterDebugInfo(searchText) {
+    const content = document.querySelector('.device-debug-content');
+    const searchLower = searchText.toLowerCase();
+    const originalText = content.textContent;
+    
+    if (!searchText) {
+        content.innerHTML = originalText;
+        return;
+    }
+    
+    // 高亮匹配的文本
+    const regex = new RegExp(`(${searchText})`, 'gi');
+    const highlightedText = originalText.replace(regex, '<mark>$1</mark>');
+    content.innerHTML = highlightedText;
+}
+
+// 添加搜索输入事件监听
+document.addEventListener('DOMContentLoaded', function() {
+    updateCurrentTime();
+    setInterval(updateCurrentTime, 1000);
+    
+    const searchInput = document.getElementById('debugSearch');
+    if (searchInput) {
+        searchInput.addEventListener('input', function(e) {
+            filterDebugInfo(e.target.value);
+        });
+    }
+});
+</script>
+{% endblock %}
+{% endblock %} 
